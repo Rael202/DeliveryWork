@@ -134,21 +134,13 @@ module delivery::delivery {
     }
 
     // The Company can make payment for a Delivery
-    public entry fun make_payment(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        assert!(delivery.finishedDelivery, EInvalidDeliveryStatus);
+    public fun make_payment(cap: &DeliveryCap, self: &mut DeliveryWork, driver: address, ctx: &mut TxContext) : Coin<SUI> {
+        assert!(cap.to == object::id(self), EInvalidAccess);
+        assert!(self.finishedDelivery, EInvalidDeliveryStatus);
 
-        let state: bool = delivery.finishedDelivery;
-        let driver = *borrow(&delivery.driver);
-        let escrow_amount = balance::value(&delivery.escrow);
-        let escrow_coin = coin::take(&mut delivery.escrow, escrow_amount, ctx);
-        if (state) {
-            // Transfer funds to the driver
-            transfer::public_transfer(escrow_coin, driver);
-        } else {
-            // Refund funds to the company
-            transfer::public_transfer(escrow_coin, delivery.company);
-        };
+        let driver = table::remove(&mut self.drivers, driver);
+        let coin = coin::take(&mut self.escrow, self.deliveryCost, ctx);
+        coin
     }
 
     // The Company can request a refund for a Delivery
@@ -161,20 +153,6 @@ module delivery::delivery {
         transfer::public_transfer(escrow_coin, delivery.company);
 
     }
-
-    // The Company can extend the due date for a Delivery
-    public entry fun extend_due_date(delivery: &mut DeliveryWork, new_due_date: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        delivery.due_date = new_due_date;
-    }
-
-    // The Company can update the deliveryCost for a Delivery
-    public entry fun update_delivery_price(delivery: &mut DeliveryWork, new_cost: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        delivery.deliveryCost = new_cost;
-    }
-
-
     // The Company can withdraw funds from the escrow
     public entry fun withdraw_funds(cap: &DeliveryCap, self: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
         assert!(cap.to == object::id(self), EInvalidAccess);
