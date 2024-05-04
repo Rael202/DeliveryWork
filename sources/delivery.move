@@ -136,17 +136,6 @@ module delivery::delivery {
         };
         table::add<ID, DeliveryRecord>(&mut records.completedDeliveries, object::uid_to_inner(&delivery.id), deliveryWorkRecord);
     }
-
-    // Upload proof of delivery
-    public entry fun upload_proof_of_delivery(delivery: &mut DeliveryWork, proof: String, ctx: &mut TxContext) {
-        // assert!(tx_context::sender(ctx) == delivery.driver, ENotDriver);
-        delivery.proof_of_delivery = some(proof);
-        // Mark the delivery as completed
-        // mark_delivery_complete(delivery,records, ctx);
-        // Start the Payment process
-        make_payment(delivery, ctx);
-    }
-
     // The Driver can report issues with a Delivery
     public entry fun report_delivery_issues(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
         assert!(contains(&delivery.driver, &tx_context::sender(ctx)), ENotDriver);
