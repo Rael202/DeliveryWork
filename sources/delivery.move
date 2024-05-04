@@ -26,6 +26,8 @@ module delivery::delivery {
     const ENotDriver: u64 = 6;
     // Error for invalid withdrawal
     const EInvalidWithdrawal: u64 = 7;
+    // Error for share object access
+    const EInvalidAccess : u64 = 8;
 
     // Struct definitions
     struct DeliveryWork has key, store {
@@ -111,19 +113,6 @@ module delivery::delivery {
         };
         table::add(&mut self.drivers, driver, driver_);
     }
-
-    // The Company can assign a Driver
-    public entry fun assign_driver(delivery: &mut DeliveryWork, driver: address, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        delivery.driver = some(driver);
-    }
-
-    // The Company can unassign a Driver
-    public entry fun unassign_driver(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        delivery.driver = none();
-    }
-
     // The Driver can apply for a Delivery
     public entry fun apply_for_delivery(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
         assert!(is_some(&delivery.driver), EInvalidApplication);
