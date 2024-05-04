@@ -122,19 +122,16 @@ module delivery::delivery {
     }
 
     // The Driver can mark a Delivery as completed
-    public entry fun mark_delivery_complete(self: &mut DeliveryWork, ctx: &mut TxContext) {
+    public entry fun mark_delivery_complete(records: &mut DeliveryRecords, self: &mut DeliveryWork, proof_of_delivery: String, ctx: &mut TxContext) {
         let driver = table::borrow_mut(&mut self.drivers, sender(ctx));
         driver.apply = true;
-    }
 
-    // Add Delivery Record to the Delivery Records
-    public entry fun add_complete_delivery_record(records: &mut DeliveryRecords, delivery: &DeliveryWork, proof_of_delivery: String, ctx: &mut TxContext) {
         let deliveryWorkRecord = DeliveryRecord {
             id: object::new(ctx),
-            company: delivery.company,
+            company: self.company,
             proof_of_delivery: proof_of_delivery,
         };
-        table::add<ID, DeliveryRecord>(&mut records.completedDeliveries, object::uid_to_inner(&delivery.id), deliveryWorkRecord);
+        table::add<ID, DeliveryRecord>(&mut records.completedDeliveries, object::uid_to_inner(&self.id), deliveryWorkRecord);
     }
     // The Driver can report issues with a Delivery
     public entry fun report_delivery_issues(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
