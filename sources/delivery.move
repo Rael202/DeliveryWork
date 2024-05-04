@@ -3,31 +3,19 @@ module delivery::delivery {
     use sui::transfer;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::clock::{Self, Clock};
     use sui::object::{Self, UID, ID};
     use sui::balance::{Self, Balance};
-    use sui::tx_context::{Self, TxContext, sender};
+    use sui::tx_context::{TxContext, sender};
     use sui::table::{Self, Table};
 
-    use std::option::{Option, none, some, is_some, contains, borrow};
+    use std::option::{Option, none};
     use std::string::{String};
 
     // Errors
-    //Error for invalid Application
-    const EInvalidApplication: u64 = 1;
-    //Error for invalid Delivery
-    const EInvalidDelivery: u64 = 2;
     //Error for invalid Delivery Status
-    const EInvalidDeliveryStatus: u64 = 3;
-    const ENotCompany: u64 = 4;
-    // Error for already resolved issues
-    const EAlreadyResolved: u64 = 5;
-    // Error for not being a driver
-    const ENotDriver: u64 = 6;
-    // Error for invalid withdrawal
-    const EInvalidWithdrawal: u64 = 7;
+    const EInvalidDeliveryStatus: u64 = 0;
     // Error for share object access
-    const EInvalidAccess : u64 = 8;
+    const EInvalidAccess : u64 = 1;
 
     // Struct definitions
     struct DeliveryWork has key, store {
@@ -104,7 +92,7 @@ module delivery::delivery {
         cap
     }
     // creates new driver inside the share object
-    public entry fun new_driver(self: &mut DeliveryWork, driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
+    public entry fun new_driver(self: &mut DeliveryWork, driver: address, driverName: String, vehicleType: String, driverRating: u64) {
         let driver_ = DriverProfile {
             driver: driver,
             driverName: driverName,
@@ -134,24 +122,13 @@ module delivery::delivery {
     }
 
     // The Company can make payment for a Delivery
-    public fun make_payment(cap: &DeliveryCap, self: &mut DeliveryWork, driver: address, ctx: &mut TxContext) : Coin<SUI> {
+    public fun make_payment(cap: &DeliveryCap, self: &mut DeliveryWork, driver: address, ctx: &mut TxContext) {
         assert!(cap.to == object::id(self), EInvalidAccess);
         assert!(self.finishedDelivery, EInvalidDeliveryStatus);
 
-        let driver = table::remove(&mut self.drivers, driver);
+        let driver = table::borrow(&self.drivers, driver);
         let coin = coin::take(&mut self.escrow, self.deliveryCost, ctx);
-        coin
-    }
-
-    // The Company can request a refund for a Delivery
-    public entry fun request_refund(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        assert!(delivery.finishedDelivery, EInvalidDeliveryStatus);
-        let escrow_amount = balance::value(&delivery.escrow);
-        let escrow_coin = coin::take(&mut delivery.escrow, escrow_amount, ctx);
-        // Refund funds to the company
-        transfer::public_transfer(escrow_coin, delivery.company);
-
+        transfer::public_transfer(coin, driver.driver);
     }
     // The Company can withdraw funds from the escrow
     public entry fun withdraw_funds(cap: &DeliveryCap, self: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
@@ -164,25 +141,11 @@ module delivery::delivery {
         let coin_ = coin::into_balance(amount);
         balance::join(&mut delivery.escrow, coin_);
     }
-
-    // // The Company can rate a Driver
-    // public entry fun rate_driver(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
-    //     assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
-    //     driver.driverRating = rating;
-    // }
-
-    // // update the driver rating by adding the new rating to the existing rating
-    // public entry fun update_driver_rating(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
-    //     assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
-    //     driver.driverRating = driver.driverRating + rating;
-    // }
-
-    // Company can pay Tips to the driver for a Delivery
-    public entry fun pay_tips(delivery: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotCompany);
-        let coin = coin::take(&mut delivery.escrow, amount, ctx);
-        let driver_address = *borrow(&delivery.driver);
-        sui::transfer::public_transfer(coin, driver_address);
+    // The Company can rate a Driver
+    public entry fun rate_driver(cap: &DeliveryCap, self: &mut DeliveryWork, rating: u64, driver: address) {
+        assert!(cap.to == object::id(self), EInvalidAccess);
+        let driver = table::borrow_mut(&mut self.drivers, driver);
+        driver.driverRating = driver.driverRating + rating;
     }
 
     // The Company can view the Delivery's status
@@ -194,6 +157,4 @@ module delivery::delivery {
     public entry fun get_deliveryCost(delivery: &DeliveryWork): u64 {
         delivery.deliveryCost
     }
-
-    
 }
