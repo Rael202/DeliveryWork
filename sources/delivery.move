@@ -65,18 +65,19 @@ module delivery::delivery {
 
     struct DeliveryRecords has key, store {
         id: UID,
-        company: address,
+        company: ID,
         completedDeliveries: Table<ID, DeliveryRecord>,
     }
 
     // Create a new Delivery
-    public entry fun create_delivery(company: address, companyName: String, origin: String, 
+    public entry fun new_delivery(company: address, companyName: String, origin: String, 
         destination: String, deliveryMethod: String, description: String, deliveryCost: u64, 
         deliveryPriority: String, due_date: u64,
-         clock: &Clock, ctx: &mut TxContext) {
-        let delivery_id = object::new(ctx);
+        clock: &Clock, ctx: &mut TxContext) {
+        let id_ = object::new(ctx);
+        let inner_ = object::uid_to_inner(&id_);
         transfer::share_object(DeliveryWork {
-            id: delivery_id,
+            id: id_,
             company: company,
             companyName: companyName,
             origin: origin,
@@ -93,18 +94,15 @@ module delivery::delivery {
             created_at: clock::timestamp_ms(clock),
             due_date: due_date,
         });
-    }
-
-    // Initialize Delivery Records
-    public entry fun initialize_delivery_records(company: address, ctx: &mut TxContext) {
+        // Initialize Delivery Records
         let delivery_records_id = object::new(ctx);
         let delivery_records = DeliveryRecords {
             id: delivery_records_id,
-            company: company,
+            company: inner_,
             completedDeliveries: table::new<ID, DeliveryRecord>(ctx),
         };
         transfer::share_object(delivery_records);
-     
+
     }
 
     public entry fun create_driver_profile(driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
