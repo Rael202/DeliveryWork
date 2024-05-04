@@ -42,6 +42,11 @@ module delivery::delivery {
         due_date: u64,
     }
 
+    struct DeliveryCap has key, store {
+        id: UID,
+        to: ID
+    }
+
     // Driver Profile
     struct DriverProfile has store, copy, drop {
         driver: address,
@@ -64,7 +69,7 @@ module delivery::delivery {
     }
 
     // Create a new Delivery
-    public fun new_delivery(company: address, deliveryMethod: String, deliveryCost: u64, due_date: u64, ctx: &mut TxContext) {
+    public fun new_delivery(company: address, deliveryMethod: String, deliveryCost: u64, due_date: u64, ctx: &mut TxContext) : DeliveryCap {
         let id_ = object::new(ctx);
         let inner_ = object::uid_to_inner(&id_);
         transfer::share_object(DeliveryWork {
@@ -80,6 +85,7 @@ module delivery::delivery {
             proof_of_delivery: none(),
             due_date: due_date
         });
+    
         // Initialize Delivery Records
         let delivery_records_id = object::new(ctx);
         let delivery_records = DeliveryRecords {
@@ -88,7 +94,12 @@ module delivery::delivery {
             completedDeliveries: table::new<ID, DeliveryRecord>(ctx),
         };
         transfer::share_object(delivery_records);
-
+        // init the cap 
+        let cap = DeliveryCap {
+            id: object::new(ctx),
+            to: inner_
+        };
+        cap
     }
     // creates new driver inside the share object
     public entry fun new_driver(self: &mut DeliveryWork, driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
