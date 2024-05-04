@@ -31,19 +31,13 @@ module delivery::delivery {
     struct DeliveryWork has key, store {
         id: UID,
         company: address,
-        companyName: String,
-        origin: String,
-        destination: String,
         deliveryMethod: String,
         driver: Option<address>,
-        description: String,
         deliveryCost: u64,
         escrow: Balance<SUI>,
-        deliveryPriority: String,
         finishedDelivery: bool,
         delivery_issues: bool,
         proof_of_delivery: Option<String>,
-        created_at: u64,
         due_date: u64,
     }
 
@@ -70,29 +64,20 @@ module delivery::delivery {
     }
 
     // Create a new Delivery
-    public entry fun new_delivery(company: address, companyName: String, origin: String, 
-        destination: String, deliveryMethod: String, description: String, deliveryCost: u64, 
-        deliveryPriority: String, due_date: u64,
-        clock: &Clock, ctx: &mut TxContext) {
+    public fun new_delivery(company: address, deliveryMethod: String, deliveryCost: u64, due_date: u64, ctx: &mut TxContext) {
         let id_ = object::new(ctx);
         let inner_ = object::uid_to_inner(&id_);
         transfer::share_object(DeliveryWork {
             id: id_,
             company: company,
-            companyName: companyName,
-            origin: origin,
-            destination: destination,
             deliveryMethod: deliveryMethod,
             driver: none(), 
-            description: description,
             deliveryCost: deliveryCost,
             escrow: balance::zero(),
-            deliveryPriority: deliveryPriority,
             finishedDelivery: false,
             delivery_issues: false,
             proof_of_delivery: none(),
-            created_at: clock::timestamp_ms(clock),
-            due_date: due_date,
+            due_date: due_date
         });
         // Initialize Delivery Records
         let delivery_records_id = object::new(ctx);
