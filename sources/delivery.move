@@ -88,7 +88,6 @@ module delivery::delivery {
             proof_of_delivery: none(),
             due_date: due_date
         });
-    
         // Initialize Delivery Records
         let delivery_records_id = object::new(ctx);
         let delivery_records = DeliveryRecords {
@@ -177,17 +176,15 @@ module delivery::delivery {
 
 
     // The Company can withdraw funds from the escrow
-    public entry fun withdraw_funds(delivery: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        assert!(balance::value(&delivery.escrow) >= amount, EInvalidWithdrawal);
-        let coin = coin::take(&mut delivery.escrow, amount, ctx);
-        transfer::public_transfer(coin, delivery.company);
+    public entry fun withdraw_funds(cap: &DeliveryCap, self: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
+        assert!(cap.to == object::id(self), EInvalidAccess);
+        let coin = coin::take(&mut self.escrow, amount, ctx);
+        transfer::public_transfer(coin, self.company);
     }
     // Transfer funds to the escrow
-    public entry fun transfer_to_escrow(delivery: &mut DeliveryWork, amount: Coin<SUI>, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        let add_coin = coin::into_balance(amount);
-        balance::join(&mut delivery.escrow, add_coin);
+    public entry fun deposit(delivery: &mut DeliveryWork, amount: Coin<SUI>) {
+        let coin_ = coin::into_balance(amount);
+        balance::join(&mut delivery.escrow, coin_);
     }
 
     // // The Company can rate a Driver
