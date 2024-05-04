@@ -6,7 +6,7 @@ module delivery::delivery {
     use sui::clock::{Self, Clock};
     use sui::object::{Self, UID, ID};
     use sui::balance::{Self, Balance};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext, sender};
     use sui::table::{Self, Table};
 
     use std::option::{Option, none, some, is_some, contains, borrow};
@@ -55,6 +55,7 @@ module delivery::delivery {
         driverName: String,
         vehicleType: String,
         driverRating: u64,
+        apply: bool
     }
 
     // Delivery Record
@@ -110,20 +111,20 @@ module delivery::delivery {
             driverName: driverName,
             vehicleType: vehicleType,
             driverRating: driverRating,
+            apply: false
         };
         table::add(&mut self.drivers, driver, driver_);
     }
     // The Driver can apply for a Delivery
-    public entry fun apply_for_delivery(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
-        assert!(is_some(&delivery.driver), EInvalidApplication);
-        delivery.driver = some(tx_context::sender(ctx));
+    public entry fun apply_for_delivery(self: &mut DeliveryWork, ctx: &mut TxContext) {
+        let driver = table::borrow_mut(&mut self.drivers, sender(ctx));
+        driver.apply = true;
     }
 
     // The Driver can mark a Delivery as completed
-    public entry fun mark_delivery_complete(delivery: &mut DeliveryWork,   ctx: &mut TxContext) {
-        assert!(contains(&delivery.driver, &tx_context::sender(ctx)), ENotDriver);
-        delivery.finishedDelivery = true;
-    
+    public entry fun mark_delivery_complete(self: &mut DeliveryWork, ctx: &mut TxContext) {
+        let driver = table::borrow_mut(&mut self.drivers, sender(ctx));
+        driver.apply = true;
     }
 
     // Add Delivery Record to the Delivery Records
