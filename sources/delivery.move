@@ -1,5 +1,4 @@
 module delivery::delivery {
-
     // Imports
     use sui::transfer;
     use sui::sui::SUI;
@@ -9,7 +8,9 @@ module delivery::delivery {
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
     use sui::table::{Self, Table};
+
     use std::option::{Option, none, some, is_some, contains, borrow};
+    use std::string::{String};
 
     // Errors
     //Error for invalid Application
@@ -30,18 +31,18 @@ module delivery::delivery {
     struct DeliveryWork has key, store {
         id: UID,
         company: address,
-        companyName: vector<u8>,
-        origin: vector<u8>,
-        destination: vector<u8>,
-        deliveryMethod: vector<u8>,
+        companyName: String,
+        origin: String,
+        destination: String,
+        deliveryMethod: String,
         driver: Option<address>,
-        description: vector<u8>,
+        description: String,
         deliveryCost: u64,
         escrow: Balance<SUI>,
-        deliveryPriority: vector<u8>,
+        deliveryPriority: String,
         finishedDelivery: bool,
         delivery_issues: bool,
-        proof_of_delivery: Option<vector<u8>>,
+        proof_of_delivery: Option<String>,
         created_at: u64,
         due_date: u64,
     }
@@ -50,8 +51,8 @@ module delivery::delivery {
     struct DriverProfile has key, store {
         id: UID,
         driver: address,
-        driverName: vector<u8>,
-        vehicleType: vector<u8>,
+        driverName: String,
+        vehicleType: String,
         driverRating: u64,
     }
 
@@ -59,7 +60,7 @@ module delivery::delivery {
     struct DeliveryRecord has key, store {
         id: UID,
         company: address,
-        proof_of_delivery: vector<u8>,
+        proof_of_delivery: String,
     }
 
     struct DeliveryRecords has key, store {
@@ -68,13 +69,10 @@ module delivery::delivery {
         completedDeliveries: Table<ID, DeliveryRecord>,
     }
 
-
-
-
     // Create a new Delivery
-    public entry fun create_delivery(company: address, companyName: vector<u8>, origin: vector<u8>, 
-        destination: vector<u8>, deliveryMethod: vector<u8>, description: vector<u8>, deliveryCost: u64, 
-        deliveryPriority: vector<u8>, due_date: u64,
+    public entry fun create_delivery(company: address, companyName: String, origin: String, 
+        destination: String, deliveryMethod: String, description: String, deliveryCost: u64, 
+        deliveryPriority: String, due_date: u64,
          clock: &Clock, ctx: &mut TxContext) {
         let delivery_id = object::new(ctx);
         transfer::share_object(DeliveryWork {
@@ -109,7 +107,7 @@ module delivery::delivery {
      
     }
 
-    public entry fun create_driver_profile(driver: address, driverName: vector<u8>, vehicleType: vector<u8>, driverRating: u64, ctx: &mut TxContext) {
+    public entry fun create_driver_profile(driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
         let driver_id = object::new(ctx);
         transfer::share_object(DriverProfile {
             id: driver_id,
@@ -146,7 +144,7 @@ module delivery::delivery {
     }
 
     // Add Delivery Record to the Delivery Records
-    public entry fun add_complete_delivery_record(records: &mut DeliveryRecords, delivery: &DeliveryWork, proof_of_delivery: vector<u8>, ctx: &mut TxContext) {
+    public entry fun add_complete_delivery_record(records: &mut DeliveryRecords, delivery: &DeliveryWork, proof_of_delivery: String, ctx: &mut TxContext) {
         let deliveryWorkRecord = DeliveryRecord {
             id: object::new(ctx),
             company: delivery.company,
@@ -156,7 +154,7 @@ module delivery::delivery {
     }
 
     // Upload proof of delivery
-    public entry fun upload_proof_of_delivery(delivery: &mut DeliveryWork, proof: vector<u8>, ctx: &mut TxContext) {
+    public entry fun upload_proof_of_delivery(delivery: &mut DeliveryWork, proof: String, ctx: &mut TxContext) {
         // assert!(tx_context::sender(ctx) == delivery.driver, ENotDriver);
         delivery.proof_of_delivery = some(proof);
         // Mark the delivery as completed
@@ -198,7 +196,6 @@ module delivery::delivery {
             // Refund funds to the company
             transfer::public_transfer(escrow_coin, delivery.company);
         };
-
     }
 
     // The Company can request a refund for a Delivery
@@ -232,9 +229,6 @@ module delivery::delivery {
         let coin = coin::take(&mut delivery.escrow, amount, ctx);
         transfer::public_transfer(coin, delivery.company);
     }
-
-  
-
     // Transfer funds to the escrow
     public entry fun transfer_to_escrow(delivery: &mut DeliveryWork, amount: Coin<SUI>, ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
@@ -261,7 +255,6 @@ module delivery::delivery {
         let driver_address = *borrow(&delivery.driver);
         sui::transfer::public_transfer(coin, driver_address);
     }
-
 
     // The Company can view the Delivery's status
     public entry fun view_delivery_status(delivery: &DeliveryWork): bool {
