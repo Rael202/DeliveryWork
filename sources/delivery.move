@@ -35,6 +35,7 @@ module delivery::delivery {
         driver: Option<address>,
         deliveryCost: u64,
         escrow: Balance<SUI>,
+        drivers: Table<address, DriverProfile>,
         finishedDelivery: bool,
         delivery_issues: bool,
         proof_of_delivery: Option<String>,
@@ -42,8 +43,7 @@ module delivery::delivery {
     }
 
     // Driver Profile
-    struct DriverProfile has key, store {
-        id: UID,
+    struct DriverProfile has store, copy, drop {
         driver: address,
         driverName: String,
         vehicleType: String,
@@ -74,6 +74,7 @@ module delivery::delivery {
             driver: none(), 
             deliveryCost: deliveryCost,
             escrow: balance::zero(),
+            drivers: table::new(ctx),
             finishedDelivery: false,
             delivery_issues: false,
             proof_of_delivery: none(),
@@ -89,16 +90,15 @@ module delivery::delivery {
         transfer::share_object(delivery_records);
 
     }
-
-    public entry fun create_driver_profile(driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
-        let driver_id = object::new(ctx);
-        transfer::share_object(DriverProfile {
-            id: driver_id,
+    // creates new driver inside the share object
+    public entry fun new_driver(self: &mut DeliveryWork, driver: address, driverName: String, vehicleType: String, driverRating: u64, ctx: &mut TxContext) {
+        let driver_ = DriverProfile {
             driver: driver,
             driverName: driverName,
             vehicleType: vehicleType,
             driverRating: driverRating,
-        });
+        };
+        table::add(&mut self.drivers, driver, driver_);
     }
 
     // The Company can assign a Driver
@@ -219,17 +219,17 @@ module delivery::delivery {
         balance::join(&mut delivery.escrow, add_coin);
     }
 
-    // The Company can rate a Driver
-    public entry fun rate_driver(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
-        driver.driverRating = rating;
-    }
+    // // The Company can rate a Driver
+    // public entry fun rate_driver(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
+    //     assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
+    //     driver.driverRating = rating;
+    // }
 
-    // update the driver rating by adding the new rating to the existing rating
-    public entry fun update_driver_rating(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
-        driver.driverRating = driver.driverRating + rating;
-    }
+    // // update the driver rating by adding the new rating to the existing rating
+    // public entry fun update_driver_rating(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
+    //     assert!(tx_context::sender(ctx) == driver.driver, ENotDriver);
+    //     driver.driverRating = driver.driverRating + rating;
+    // }
 
     // Company can pay Tips to the driver for a Delivery
     public entry fun pay_tips(delivery: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
