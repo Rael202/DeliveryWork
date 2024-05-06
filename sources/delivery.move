@@ -25,8 +25,10 @@ module delivery::delivery {
     const ENotDriver: u64 = 6;
     // Error for invalid withdrawal
     const EInvalidWithdrawal: u64 = 7;
+    const EInvalidTransferAmount: u64 = 8;
 
     // Struct definitions
+    
     struct DeliveryWork has key, store {
         id: UID,
         company: address,
@@ -135,35 +137,37 @@ module delivery::delivery {
     // The Driver can apply for a Delivery
     public entry fun apply_for_delivery(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
         assert!(is_some(&delivery.driver), EInvalidApplication);
+        let assigned_driver = borrow(&delivery.driver);
+        assert!(tx_context::sender(ctx) == *assigned_driver, ENotDriver); // Ensure the sender is the assigned driver
         delivery.driver = some(tx_context::sender(ctx));
     }
 
     // The Driver can mark a Delivery as completed
     public entry fun mark_delivery_complete(delivery: &mut DeliveryWork,   ctx: &mut TxContext) {
-        assert!(contains(&delivery.driver, &tx_context::sender(ctx)), ENotDriver);
+        assert!(contains(&delivery.driver, &tx_context::sender(ctx)), ENotDriver); // Ensure the sender is the assigned driver
+        assert!(!delivery.delivery_issues, EInvalidDeliveryStatus); // Ensure there are no outstanding issues
         delivery.finishedDelivery = true;
     
     }
 
-    // Add Delivery Record to the Delivery Records
-    public entry fun add_complete_delivery_record(records: &mut DeliveryRecords, delivery: &DeliveryWork, proof_of_delivery: vector<u8>, ctx: &mut TxContext) {
-        let deliveryWorkRecord = DeliveryRecord {
-            id: object::new(ctx),
-            company: delivery.company,
-            proof_of_delivery: proof_of_delivery,
-        };
-        table::add<ID, DeliveryRecord>(&mut records.completedDeliveries, object::uid_to_inner(&delivery.id), deliveryWorkRecord);
-    }
+ 
+    // Upload proof of delivery and add to delivery records
+   public entry fun upload_proof_of_delivery(delivery: &mut DeliveryWork, records: &mut DeliveryRecords, proof: vector<u8>, ctx: &mut TxContext) {
+       assert!(tx_context::sender(ctx) == *borrow(&delivery.driver), ENotDriver); // Uncommented line to ensure only the assigned driver can upload proof
+       delivery.proof_of_delivery = some(proof);
 
-    // Upload proof of delivery and Start payment 
-    public entry fun upload_proof_of_delivery(delivery: &mut DeliveryWork, proof: vector<u8>, ctx: &mut TxContext) {
-        assert!(contains(&delivery.driver, &tx_context::sender(ctx)), ENotDriver);
-        delivery.proof_of_delivery = some(proof);
-        // Mark the delivery as completed
-        mark_delivery_complete(delivery, ctx);
-        // Start the Payment process
-        make_payment(delivery, ctx);
-    }
+       let deliveryWorkRecord = DeliveryRecord {
+           id: object::new(ctx),
+           company: delivery.company,
+           proof_of_delivery: proof,
+       };
+       table::add<ID, DeliveryRecord>(&mut records.completedDeliveries, object::uid_to_inner(&delivery.id), deliveryWorkRecord);
+
+       // Mark the delivery as completed
+       mark_delivery_complete(delivery, ctx);
+       // Start the Payment process
+       make_payment(delivery, ctx);
+   }
 
     // The Driver can report issues with a Delivery
     public entry fun report_delivery_issues(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
@@ -182,34 +186,42 @@ module delivery::delivery {
         delivery.delivery_issues = false;
     }
 
+
+    // Helper function to transfer funds
+    fun transfer_funds(coin: Coin<SUI>, recipient: address) {
+       transfer::public_transfer(coin, recipient);
+    }
+
     // The Company can make payment for a Delivery
     public entry fun make_payment(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
         assert!(delivery.finishedDelivery, EInvalidDeliveryStatus);
+        // Check if the driver is assigned
+        assert!(is_some(&delivery.driver), EInvalidDelivery);
 
         let state: bool = delivery.finishedDelivery;
         let driver = *borrow(&delivery.driver);
         let escrow_amount = balance::value(&delivery.escrow);
         let escrow_coin = coin::take(&mut delivery.escrow, escrow_amount, ctx);
         if (state) {
-            // Transfer funds to the driver
-            transfer::public_transfer(escrow_coin, driver);
-        } else {
-            // Refund funds to the company
-            transfer::public_transfer(escrow_coin, delivery.company);
-        };
+           // Transfer funds to the driver
+           transfer_funds(escrow_coin, driver);
+       } else {
+           // Refund funds to the company
+           transfer_funds(escrow_coin, delivery.company);
+       };
 
     }
 
-    // The Company can request a refund for a Delivery
+
+     // The Company can request a refund for a Delivery
     public entry fun request_refund(delivery: &mut DeliveryWork, ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
         assert!(delivery.finishedDelivery, EInvalidDeliveryStatus);
         let escrow_amount = balance::value(&delivery.escrow);
         let escrow_coin = coin::take(&mut delivery.escrow, escrow_amount, ctx);
         // Refund funds to the company
-        transfer::public_transfer(escrow_coin, delivery.company);
-
+        transfer_funds(escrow_coin, delivery.company);
     }
 
     // The Company can extend the due date for a Delivery
@@ -225,22 +237,25 @@ module delivery::delivery {
     }
 
 
-    // The Company can withdraw funds from the escrow
-    public entry fun withdraw_funds(delivery: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        assert!(balance::value(&delivery.escrow) >= amount, EInvalidWithdrawal);
-        let coin = coin::take(&mut delivery.escrow, amount, ctx);
-        transfer::public_transfer(coin, delivery.company);
-    }
 
+    // The Company can withdraw funds from the escrow
+   public entry fun withdraw_funds(delivery: &mut DeliveryWork, amount: u64, ctx: &mut TxContext) {
+       assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
+       assert!(balance::value(&delivery.escrow) >= amount, EInvalidWithdrawal);
+       let coin = coin::take(&mut delivery.escrow, amount, ctx);
+       transfer_funds(coin, delivery.company);
+   }
   
 
+
+
     // Transfer funds to the escrow
-    public entry fun transfer_to_escrow(delivery: &mut DeliveryWork, amount: Coin<SUI>, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
-        let add_coin = coin::into_balance(amount);
-        balance::join(&mut delivery.escrow, add_coin);
-    }
+   public entry fun transfer_to_escrow(delivery: &mut DeliveryWork, amount: Coin<SUI>, ctx: &mut TxContext) {
+       assert!(tx_context::sender(ctx) == delivery.company, ENotDriver);
+       assert!(coin::value(&amount) > 0, EInvalidTransferAmount); // Ensure the amount being transferred is not zero
+       let add_coin = coin::into_balance(amount);
+       balance::join(&mut delivery.escrow, add_coin);
+   }
 
     // The Company can rate a Driver
     public entry fun rate_driver(driver: &mut DriverProfile, rating: u64, ctx: &mut TxContext) {
@@ -259,19 +274,14 @@ module delivery::delivery {
         assert!(tx_context::sender(ctx) == delivery.company, ENotCompany);
         let coin = coin::take(&mut delivery.escrow, amount, ctx);
         let driver_address = *borrow(&delivery.driver);
-        sui::transfer::public_transfer(coin, driver_address);
+         transfer_funds(coin, driver_address);
     }
 
 
-    // The Company can view the Delivery's status
-    public entry fun view_delivery_status(delivery: &DeliveryWork): bool {
-        delivery.finishedDelivery
-    }
-
-    //  get the deliveryCost
-    public entry fun get_deliveryCost(delivery: &DeliveryWork): u64 {
-        delivery.deliveryCost
-    }
+    // Get the Delivery status and deliveryCost
+   public entry fun get_delivery_info(delivery: &DeliveryWork): (bool, u64) {
+       (delivery.finishedDelivery, delivery.deliveryCost)
+   }
 
     
 }
